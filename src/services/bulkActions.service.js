@@ -13,6 +13,8 @@ const { getStats, getLogs, countLogs } = require('../queries/logs.queries');
 
 const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 'failed'];
 
+const LOG_STATUSES = ['success', 'failed', 'skipped'];
+
 const BATCH_SIZE = Number(process.env.BATCH_SIZE) || 100;
 
 const BATCH_ROWS_PER_INSERT = 500;
@@ -170,12 +172,17 @@ async function getBulkActionStats(id) {
 
 async function getBulkActionLogs(id, params) {
   const bulkAction = await findBulkActionOr404(id);
+  const status = params.status;
+
+  if (status && !LOG_STATUSES.includes(status)) {
+    throw badRequest(`Unknown log status "${status}". Supported statuses: ${LOG_STATUSES.join(', ')}`);
+  }
 
   const limit = Number(params.limit) || 50;
   const offset = Number(params.offset) || 0;
 
-  const data = await getLogs(bulkAction.id, { limit, offset });
-  const total = await countLogs(bulkAction.id);
+  const data = await getLogs(bulkAction.id, { status, limit, offset });
+  const total = await countLogs(bulkAction.id, status);
 
   return { total, limit, offset, data };
 }
