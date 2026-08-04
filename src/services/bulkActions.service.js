@@ -9,7 +9,7 @@ const {
   getBulkActionById
 } = require('../queries/bulkActions.queries');
 const { insertBatches } = require('../queries/batches.queries');
-const { getStats, getLogs, countLogs } = require('../queries/logs.queries');
+const { getStats, getLogs, countLogs, insertLogs } = require('../queries/logs.queries');
 
 const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 'failed'];
 
@@ -111,6 +111,18 @@ async function findDuplicateEntities(entityType, entityIds, dedupeField) {
   return findDuplicates(entities, dedupeField);
 }
 
+async function logDuplicatesAsSkipped(bulkActionId, duplicates, dedupeField) {
+  const skippedLogs = duplicates.map((duplicate) => ({
+    entityId: duplicate.entityId,
+    status: 'skipped',
+    message: `duplicate ${dedupeField}: ${duplicate.value}`
+  }));
+
+  for (const rows of chunkArray(skippedLogs, BATCH_ROWS_PER_INSERT)) {
+    await insertLogs(bulkActionId, rows);
+  }
+}
+
 function futureScheduledAt(scheduledAt) {
   if (!scheduledAt) {
     return null;
@@ -136,6 +148,9 @@ async function createBulkAction(body) {
     ? await findDuplicateEntities(entityType, entityIds, entityConfig.dedupeField)
     : [];
 
+  const duplicateIds = new Set(duplicates.map((duplicate) => duplicate.entityId));
+  const idsToProcess = entityIds.filter((entityId) => !duplicateIds.has(entityId));
+
   const bulkAction = await insertBulkAction({
     accountId,
     entityType,
@@ -144,7 +159,11 @@ async function createBulkAction(body) {
     scheduledAt
   });
 
-  const batches = chunkArray(entityIds, BATCH_SIZE);
+  if (duplicates.length > 0) {
+    await logDuplicatesAsSkipped(bulkAction.id, duplicates, entityConfig.dedupeField);
+  }
+
+  const batches = chunkArray(idsToProcess, BATCH_SIZE);
 
   for (const rows of chunkArray(batches, BATCH_ROWS_PER_INSERT)) {
     await insertBatches(bulkAction.id, rows);
