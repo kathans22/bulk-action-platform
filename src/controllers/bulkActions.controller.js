@@ -1,7 +1,8 @@
 const {
   createBulkAction,
   listBulkActions,
-  getBulkAction
+  getBulkAction,
+  getBulkActionStats
 } = require('../services/bulkActions.service');
 
 async function create(req, res) {
@@ -31,4 +32,13 @@ async function detail(req, res) {
   }
 }
 
-module.exports = { create, list, detail };
+async function stats(req, res) {
+  try {
+    const bulkActionStats = await getBulkActionStats(req.params.id);
+    res.json(bulkActionStats);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ error: error.message });
+  }
+}
+
+module.exports = { create, list, detail, stats };

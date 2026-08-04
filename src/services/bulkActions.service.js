@@ -169,10 +169,30 @@ async function getBulkAction(id) {
   return { ...bulkAction, progress: { processed, total, percentage } };
 }
 
+// Counts are aggregated from the logs table. For millions of rows you would
+// keep running counters on the bulk_actions row instead; aggregating is simpler
+// and correct at this scale.
+async function getBulkActionStats(id) {
+  const bulkAction = await findBulkActionOr404(id);
+  const rows = await getStats(bulkAction.id);
+
+  const counts = { success: 0, failed: 0, skipped: 0 };
+
+  for (const row of rows) {
+    counts[row.status] = Number(row.count);
+  }
+
+  const total = bulkAction.total_entities;
+  const pending = total - (counts.success + counts.failed + counts.skipped);
+
+  return { bulkActionId: bulkAction.id, total, ...counts, pending };
+}
+
 module.exports = {
   createBulkAction,
   listBulkActions,
   getBulkAction,
+  getBulkActionStats,
   validateRequest,
   chunkArray,
   fetchEntityIds
