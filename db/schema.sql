@@ -37,3 +37,20 @@ CREATE TABLE contacts (
 
 -- Every bulk action is scoped to one account, so every lookup filters on it.
 CREATE INDEX idx_contacts_account_id ON contacts(account_id);
+
+
+-- One row per submitted bulk action. Holds what to do and how far it has got.
+CREATE TABLE bulk_actions (
+  id SERIAL PRIMARY KEY,
+  account_id VARCHAR(50) NOT NULL,
+  entity_type VARCHAR(50) NOT NULL,
+  action_type VARCHAR(50) NOT NULL,
+  -- status: queued, scheduled, processing, completed, failed
+  status VARCHAR(20) NOT NULL DEFAULT 'queued',
+  configuration JSONB NOT NULL,
+  total_entities INTEGER DEFAULT 0,
+  scheduled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ
+);
