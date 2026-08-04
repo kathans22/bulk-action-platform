@@ -1,0 +1,15 @@
+{
+  "name": "bulk-action-platform",
+  "version": "1.0.0",
+  "description": "Bulk action platform for CRM entities",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "worker": "node src/worker/worker.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  }
+}
