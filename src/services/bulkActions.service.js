@@ -5,9 +5,11 @@ const {
   insertBulkAction,
   setTotalEntities,
   listBulkActions: selectBulkActions,
-  countBulkActions
+  countBulkActions,
+  getBulkActionById
 } = require('../queries/bulkActions.queries');
 const { insertBatches } = require('../queries/batches.queries');
+const { getStats } = require('../queries/logs.queries');
 
 const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 'failed'];
 
@@ -22,6 +24,30 @@ function badRequest(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+}
+
+function notFound(message) {
+  const error = new Error(message);
+  error.statusCode = 404;
+  return error;
+}
+
+// Every :id endpoint needs the same two answers: is it a number, and does it
+// exist. A non-numeric id would otherwise reach Postgres and fail as a 500.
+async function findBulkActionOr404(id) {
+  const bulkActionId = Number(id);
+
+  if (!Number.isInteger(bulkActionId)) {
+    throw badRequest(`Bulk action id must be an integer, got "${id}"`);
+  }
+
+  const bulkAction = await getBulkActionById(bulkActionId);
+
+  if (!bulkAction) {
+    throw notFound(`Bulk action ${bulkActionId} not found`);
+  }
+
+  return bulkAction;
 }
 
 // Everything the request needs to be valid before anything is written. The two
@@ -130,4 +156,24 @@ async function listBulkActions(params) {
   return { total, limit, offset, data };
 }
 
-module.exports = { createBulkAction, listBulkActions, validateRequest, chunkArray, fetchEntityIds };
+async function getBulkAction(id) {
+  const bulkAction = await findBulkActionOr404(id);
+  const stats = await getStats(bulkAction.id);
+
+  // Every entity the worker touched wrote exactly one log row, whatever the
+  // outcome, so the log count is how many have been processed.
+  const processed = stats.reduce((sum, row) => sum + Number(row.count), 0);
+  const total = bulkAction.total_entities;
+  const percentage = total === 0 ? 0 : Math.round((processed / total) * 100);
+
+  return { ...bulkAction, progress: { processed, total, percentage } };
+}
+
+module.exports = {
+  createBulkAction,
+  listBulkActions,
+  getBulkAction,
+  validateRequest,
+  chunkArray,
+  fetchEntityIds
+};
