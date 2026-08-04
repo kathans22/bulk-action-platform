@@ -22,4 +22,24 @@ function validateConfiguration(configuration, entityConfig) {
   }
 }
 
-module.exports = { validateConfiguration };
+// Builds the statement that applies this action to ONE row. Every action file
+// exports a buildStatement, so the worker runs it without knowing which action
+// it is. The caller appends the row id as the last parameter.
+//
+// Values are always placeholders. Field names are interpolated, which is only
+// safe because validateConfiguration has already checked each one against the
+// entity's updatableFields list.
+function buildStatement(entityConfig, configuration) {
+  const names = Object.keys(configuration.fields);
+  const assignments = names.map((name, index) => `${name} = $${index + 1}`);
+  const values = names.map((name) => configuration.fields[name]);
+  const idPlaceholder = `$${names.length + 1}`;
+
+  const sql = `UPDATE ${entityConfig.table}
+     SET ${assignments.join(', ')}, updated_at = NOW()
+     WHERE id = ${idPlaceholder}`;
+
+  return { sql, values };
+}
+
+module.exports = { validateConfiguration, buildStatement };
