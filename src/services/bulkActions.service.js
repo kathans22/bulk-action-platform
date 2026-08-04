@@ -1,6 +1,15 @@
 const { getEntityConfig } = require('../entities');
 const { getActionHandler } = require('../actions');
 const { getContactIdsByAccount } = require('../queries/contacts.queries');
+const { insertBulkAction, setTotalEntities } = require('../queries/bulkActions.queries');
+const { insertBatches } = require('../queries/batches.queries');
+
+const BATCH_SIZE = Number(process.env.BATCH_SIZE) || 100;
+
+// How many batch rows go into one INSERT. A single INSERT for every batch of a
+// million entities would build a 10,000-row statement, so the rows are inserted
+// 500 at a time instead.
+const BATCH_ROWS_PER_INSERT = 500;
 
 function badRequest(message) {
   const error = new Error(message);
@@ -47,4 +56,51 @@ function fetchEntityIds(entityType, accountId) {
   throw badRequest(`No id lookup for entity type "${entityType}"`);
 }
 
-module.exports = { validateRequest, chunkArray, fetchEntityIds };
+// A time in the past means run now, so it is stored as no schedule at all and
+// the action is queued. insertBulkAction reads the status off this value.
+function futureScheduledAt(scheduledAt) {
+  if (!scheduledAt) {
+    return null;
+  }
+
+  const date = new Date(scheduledAt);
+
+  if (Number.isNaN(date.getTime())) {
+    throw badRequest('scheduledAt must be a valid timestamp');
+  }
+
+  return date > new Date() ? date : null;
+}
+
+async function createBulkAction(body) {
+  validateRequest(body);
+
+  const { accountId, entityType, actionType, configuration } = body;
+  const scheduledAt = futureScheduledAt(body.scheduledAt);
+  const entityIds = await fetchEntityIds(entityType, accountId);
+
+  const bulkAction = await insertBulkAction({
+    accountId,
+    entityType,
+    actionType,
+    configuration,
+    scheduledAt
+  });
+
+  const batches = chunkArray(entityIds, BATCH_SIZE);
+
+  for (const rows of chunkArray(batches, BATCH_ROWS_PER_INSERT)) {
+    await insertBatches(bulkAction.id, rows);
+  }
+
+  await setTotalEntities(bulkAction.id, entityIds.length);
+
+  return {
+    id: bulkAction.id,
+    status: bulkAction.status,
+    totalEntities: entityIds.length,
+    createdAt: bulkAction.created_at
+  };
+}
+
+module.exports = { createBulkAction, validateRequest, chunkArray, fetchEntityIds };
