@@ -8,8 +8,16 @@ function randomAge() {
   return 18 + Math.floor(Math.random() * 48);
 }
 
+// Every 10th contact reuses an earlier email, so roughly 10% of the rows are
+// duplicates for the de-duplication feature to skip.
+function buildEmail(number) {
+  const owner = number % 10 === 0 ? number - 9 : number;
+  return `contact${owner}@example.com`;
+}
+
 function buildContact(number) {
-  return [ACCOUNT_ID, `Contact ${number}`, `contact${number}@example.com`, randomAge()];
+  const status = number % 2 === 0 ? 'inactive' : 'active';
+  return [ACCOUNT_ID, `Contact ${number}`, buildEmail(number), randomAge(), status];
 }
 
 // One INSERT with many VALUES rows is far fewer round trips than one per contact.
@@ -18,11 +26,11 @@ async function insertContacts(contacts) {
   const rows = contacts.map((contact) => {
     const start = values.length;
     values.push(...contact);
-    return `($${start + 1}, $${start + 2}, $${start + 3}, $${start + 4})`;
+    return `($${start + 1}, $${start + 2}, $${start + 3}, $${start + 4}, $${start + 5})`;
   });
 
   await query(
-    `INSERT INTO contacts (account_id, name, email, age) VALUES ${rows.join(', ')}`,
+    `INSERT INTO contacts (account_id, name, email, age, status) VALUES ${rows.join(', ')}`,
     values
   );
 }
