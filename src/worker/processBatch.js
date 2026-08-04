@@ -1,10 +1,14 @@
 const { query } = require('../config/db');
 const { getEntityConfig } = require('../entities');
 const { getActionHandler } = require('../actions');
-const { getBulkActionById, markStarted } = require('../queries/bulkActions.queries');
+const {
+  getBulkActionById,
+  markStarted,
+  markFinished
+} = require('../queries/bulkActions.queries');
 const { getContactsByIds } = require('../queries/contacts.queries');
 const { insertLogs } = require('../queries/logs.queries');
-const { markBatchDone } = require('../queries/batches.queries');
+const { markBatchDone, countPendingBatches } = require('../queries/batches.queries');
 
 function fetchEntities(entityType, entityIds) {
   if (entityType === 'contact') {
@@ -20,6 +24,14 @@ async function applyToEntity(statement, entity) {
     return { entityId: entity.id, status: 'success', message: null };
   } catch (error) {
     return { entityId: entity.id, status: 'failed', message: error.message };
+  }
+}
+
+async function completeBulkActionIfLastBatch(bulkActionId) {
+  const pending = await countPendingBatches(bulkActionId);
+
+  if (pending === 0) {
+    await markFinished(bulkActionId, 'completed');
   }
 }
 
@@ -45,6 +57,7 @@ async function processBatch(batch) {
   }
 
   await markBatchDone(batch.id);
+  await completeBulkActionIfLastBatch(bulkAction.id);
 
   console.log(`Batch ${batch.id} applied ${bulkAction.action_type} to ${results.length} entities`);
 }
