@@ -9,7 +9,7 @@ const {
   getBulkActionById
 } = require('../queries/bulkActions.queries');
 const { insertBatches } = require('../queries/batches.queries');
-const { getStats } = require('../queries/logs.queries');
+const { getStats, getLogs, countLogs } = require('../queries/logs.queries');
 
 const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 'failed'];
 
@@ -188,11 +188,26 @@ async function getBulkActionStats(id) {
   return { bulkActionId: bulkAction.id, total, ...counts, pending };
 }
 
+// The assignment does not list a logs endpoint, but it does require "log
+// retrieval with filtering", so the logs are exposed here.
+async function getBulkActionLogs(id, params) {
+  const bulkAction = await findBulkActionOr404(id);
+
+  const limit = Number(params.limit) || 50;
+  const offset = Number(params.offset) || 0;
+
+  const data = await getLogs(bulkAction.id, { limit, offset });
+  const total = await countLogs(bulkAction.id);
+
+  return { total, limit, offset, data };
+}
+
 module.exports = {
   createBulkAction,
   listBulkActions,
   getBulkAction,
   getBulkActionStats,
+  getBulkActionLogs,
   validateRequest,
   chunkArray,
   fetchEntityIds
