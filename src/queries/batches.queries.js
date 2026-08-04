@@ -13,6 +13,26 @@ async function insertBatches(bulkActionId, entityIdBatches) {
   );
 }
 
+async function claimNextBatch() {
+  const result = await query(
+    `UPDATE bulk_action_batches
+     SET status = 'processing', attempts = attempts + 1
+     WHERE id = (
+       SELECT b.id
+       FROM bulk_action_batches b
+       JOIN bulk_actions a ON a.id = b.bulk_action_id
+       WHERE b.status = 'pending'
+         AND (a.scheduled_at IS NULL OR a.scheduled_at <= NOW())
+       ORDER BY b.id
+       LIMIT 1
+       FOR UPDATE SKIP LOCKED
+     )
+     RETURNING *`
+  );
+
+  return result.rows[0];
+}
+
 async function countPendingBatches(bulkActionId) {
   const result = await query(
     `SELECT COUNT(*) FROM bulk_action_batches
@@ -41,6 +61,7 @@ async function markBatchFailed(batchId, errorMessage) {
 
 module.exports = {
   insertBatches,
+  claimNextBatch,
   countPendingBatches,
   markBatchDone,
   markBatchFailed
