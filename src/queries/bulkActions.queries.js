@@ -38,9 +38,11 @@ async function listBulkActions({ limit, offset, accountId, status }) {
   values.push(limit, offset);
 
   const result = await query(
+    // Newest first. Id breaks ties so paging cannot show the same row twice
+    // when several actions share a created_at.
     `SELECT * FROM bulk_actions
      ${where}
-     ORDER BY id DESC
+     ORDER BY created_at DESC, id DESC
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values
   );

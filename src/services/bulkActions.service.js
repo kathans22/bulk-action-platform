@@ -1,8 +1,15 @@
 const { getEntityConfig } = require('../entities');
 const { getActionHandler } = require('../actions');
 const { getContactIdsByAccount } = require('../queries/contacts.queries');
-const { insertBulkAction, setTotalEntities } = require('../queries/bulkActions.queries');
+const {
+  insertBulkAction,
+  setTotalEntities,
+  listBulkActions: selectBulkActions,
+  countBulkActions
+} = require('../queries/bulkActions.queries');
 const { insertBatches } = require('../queries/batches.queries');
+
+const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 'failed'];
 
 const BATCH_SIZE = Number(process.env.BATCH_SIZE) || 100;
 
@@ -103,4 +110,24 @@ async function createBulkAction(body) {
   };
 }
 
-module.exports = { createBulkAction, validateRequest, chunkArray, fetchEntityIds };
+// One listing filtered by status is what satisfies the assignment's "display
+// ongoing, completed and queued actions": ?status=processing, ?status=completed
+// and ?status=queued are the three views it asks for.
+async function listBulkActions(params) {
+  const status = params.status;
+
+  if (status && !BULK_ACTION_STATUSES.includes(status)) {
+    throw badRequest(`Unknown status "${status}". Supported statuses: ${BULK_ACTION_STATUSES.join(', ')}`);
+  }
+
+  const limit = Number(params.limit) || 20;
+  const offset = Number(params.offset) || 0;
+  const accountId = params.accountId;
+
+  const data = await selectBulkActions({ limit, offset, accountId, status });
+  const total = await countBulkActions({ accountId, status });
+
+  return { total, limit, offset, data };
+}
+
+module.exports = { createBulkAction, listBulkActions, validateRequest, chunkArray, fetchEntityIds };
