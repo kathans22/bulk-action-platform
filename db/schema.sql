@@ -54,3 +54,20 @@ CREATE TABLE bulk_actions (
   started_at TIMESTAMPTZ,
   finished_at TIMESTAMPTZ
 );
+
+
+-- The job queue. One row per batch of entity ids waiting for a worker to claim.
+CREATE TABLE bulk_action_batches (
+  id SERIAL PRIMARY KEY,
+  bulk_action_id INTEGER NOT NULL REFERENCES bulk_actions(id),
+  entity_ids INTEGER[] NOT NULL,
+  -- status: pending, processing, done, failed
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  attempts INTEGER DEFAULT 0,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  processed_at TIMESTAMPTZ
+);
+
+-- The worker polls for pending batches, so status is the column it searches on.
+CREATE INDEX idx_bulk_action_batches_status ON bulk_action_batches(status);
