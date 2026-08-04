@@ -1,7 +1,7 @@
 const { query } = require('../config/db');
 const { getEntityConfig } = require('../entities');
 const { getActionHandler } = require('../actions');
-const { getBulkActionById } = require('../queries/bulkActions.queries');
+const { getBulkActionById, markStarted } = require('../queries/bulkActions.queries');
 const { getContactsByIds } = require('../queries/contacts.queries');
 const { insertLogs } = require('../queries/logs.queries');
 const { markBatchDone } = require('../queries/batches.queries');
@@ -28,6 +28,10 @@ async function processBatch(batch) {
   const entityConfig = getEntityConfig(bulkAction.entity_type);
   const handler = getActionHandler(bulkAction.action_type);
   const entities = await fetchEntities(bulkAction.entity_type, batch.entity_ids);
+
+  if (bulkAction.status === 'queued') {
+    await markStarted(bulkAction.id);
+  }
 
   const statement = handler.buildStatement(entityConfig, bulkAction.configuration);
   const results = [];
