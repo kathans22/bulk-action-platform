@@ -1,7 +1,5 @@
 const { query } = require('../config/db');
 
-// The ids a bulk action will act on. Ordered so batches are built the same way
-// every time.
 async function getContactIdsByAccount(accountId) {
   const result = await query(
     'SELECT id FROM contacts WHERE account_id = $1 ORDER BY id',

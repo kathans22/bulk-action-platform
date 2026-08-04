@@ -15,9 +15,6 @@ const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 
 
 const BATCH_SIZE = Number(process.env.BATCH_SIZE) || 100;
 
-// How many batch rows go into one INSERT. A single INSERT for every batch of a
-// million entities would build a 10,000-row statement, so the rows are inserted
-// 500 at a time instead.
 const BATCH_ROWS_PER_INSERT = 500;
 
 function badRequest(message) {
@@ -32,8 +29,6 @@ function notFound(message) {
   return error;
 }
 
-// Every :id endpoint needs the same two answers: is it a number, and does it
-// exist. A non-numeric id would otherwise reach Postgres and fail as a 500.
 async function findBulkActionOr404(id) {
   const bulkActionId = Number(id);
 
@@ -50,9 +45,6 @@ async function findBulkActionOr404(id) {
   return bulkAction;
 }
 
-// Everything the request needs to be valid before anything is written. The two
-// registries and the action's own validator all raise client errors, so one
-// catch turns the lot into a 400.
 function validateRequest({ accountId, entityType, actionType, configuration }) {
   if (!accountId) throw badRequest('accountId is required');
   if (!entityType) throw badRequest('entityType is required');
@@ -79,8 +71,6 @@ function chunkArray(array, size) {
   return chunks;
 }
 
-// The ids the action will act on. Contacts are the only entity today, so a
-// second entity means one more line here.
 function fetchEntityIds(entityType, accountId) {
   if (entityType === 'contact') {
     return getContactIdsByAccount(accountId);
@@ -89,8 +79,6 @@ function fetchEntityIds(entityType, accountId) {
   throw badRequest(`No id lookup for entity type "${entityType}"`);
 }
 
-// A time in the past means run now, so it is stored as no schedule at all and
-// the action is queued. insertBulkAction reads the status off this value.
 function futureScheduledAt(scheduledAt) {
   if (!scheduledAt) {
     return null;
@@ -136,9 +124,6 @@ async function createBulkAction(body) {
   };
 }
 
-// One listing filtered by status is what satisfies the assignment's "display
-// ongoing, completed and queued actions": ?status=processing, ?status=completed
-// and ?status=queued are the three views it asks for.
 async function listBulkActions(params) {
   const status = params.status;
 
@@ -160,8 +145,6 @@ async function getBulkAction(id) {
   const bulkAction = await findBulkActionOr404(id);
   const stats = await getStats(bulkAction.id);
 
-  // Every entity the worker touched wrote exactly one log row, whatever the
-  // outcome, so the log count is how many have been processed.
   const processed = stats.reduce((sum, row) => sum + Number(row.count), 0);
   const total = bulkAction.total_entities;
   const percentage = total === 0 ? 0 : Math.round((processed / total) * 100);
@@ -169,9 +152,6 @@ async function getBulkAction(id) {
   return { ...bulkAction, progress: { processed, total, percentage } };
 }
 
-// Counts are aggregated from the logs table. For millions of rows you would
-// keep running counters on the bulk_actions row instead; aggregating is simpler
-// and correct at this scale.
 async function getBulkActionStats(id) {
   const bulkAction = await findBulkActionOr404(id);
   const rows = await getStats(bulkAction.id);
@@ -188,8 +168,6 @@ async function getBulkActionStats(id) {
   return { bulkActionId: bulkAction.id, total, ...counts, pending };
 }
 
-// The assignment does not list a logs endpoint, but it does require "log
-// retrieval with filtering", so the logs are exposed here.
 async function getBulkActionLogs(id, params) {
   const bulkAction = await findBulkActionOr404(id);
 

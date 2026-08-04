@@ -1,6 +1,5 @@
 const { query } = require('../config/db');
 
-// One INSERT for every batch of the action, so submitting is a single round trip.
 async function insertBatches(bulkActionId, entityIdBatches) {
   const values = [];
   const rows = entityIdBatches.map((entityIds) => {
@@ -14,8 +13,6 @@ async function insertBatches(bulkActionId, entityIdBatches) {
   );
 }
 
-// A batch a worker is holding is not finished either, so it counts as pending.
-// This is what tells us an action still has work left.
 async function countPendingBatches(bulkActionId) {
   const result = await query(
     `SELECT COUNT(*) FROM bulk_action_batches

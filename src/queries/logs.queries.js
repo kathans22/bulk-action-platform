@@ -1,6 +1,5 @@
 const { query } = require('../config/db');
 
-// One INSERT per batch of results rather than one per entity.
 async function insertLogs(bulkActionId, logs) {
   const values = [];
   const rows = logs.map((log) => {

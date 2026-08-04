@@ -1,8 +1,6 @@
 const { query } = require('../config/db');
 
 async function insertBulkAction({ accountId, entityType, actionType, configuration, scheduledAt }) {
-  // An action with a future run time waits as 'scheduled'; everything else is
-  // ready for the worker immediately.
   const status = scheduledAt ? 'scheduled' : 'queued';
 
   const result = await query(
@@ -38,8 +36,6 @@ async function listBulkActions({ limit, offset, accountId, status }) {
   values.push(limit, offset);
 
   const result = await query(
-    // Newest first. Id breaks ties so paging cannot show the same row twice
-    // when several actions share a created_at.
     `SELECT * FROM bulk_actions
      ${where}
      ORDER BY created_at DESC, id DESC

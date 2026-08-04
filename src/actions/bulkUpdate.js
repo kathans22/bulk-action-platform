@@ -1,5 +1,3 @@
-// Rejects a bulk update configuration before anything is queued, so a bad
-// request fails at submit time instead of once per batch inside the worker.
 function validateConfiguration(configuration, entityConfig) {
   const fields = configuration && configuration.fields;
 
@@ -22,13 +20,6 @@ function validateConfiguration(configuration, entityConfig) {
   }
 }
 
-// Builds the statement that applies this action to ONE row. Every action file
-// exports a buildStatement, so the worker runs it without knowing which action
-// it is. The caller appends the row id as the last parameter.
-//
-// Values are always placeholders. Field names are interpolated, which is only
-// safe because validateConfiguration has already checked each one against the
-// entity's updatableFields list.
 function buildStatement(entityConfig, configuration) {
   const names = Object.keys(configuration.fields);
   const assignments = names.map((name, index) => `${name} = $${index + 1}`);

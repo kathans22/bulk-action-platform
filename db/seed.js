@@ -3,15 +3,14 @@ const { pool, query } = require('../src/config/db');
 const ACCOUNT_ID = 'acc_1';
 const TOTAL_CONTACTS = 5000;
 const ROWS_PER_INSERT = 500;
+const DUPLICATE_EVERY = 10;
 
 function randomAge() {
   return 18 + Math.floor(Math.random() * 48);
 }
 
-// Every 10th contact reuses an earlier email, so roughly 10% of the rows are
-// duplicates for the de-duplication feature to skip.
 function buildEmail(number) {
-  const owner = number % 10 === 0 ? number - 9 : number;
+  const owner = number % DUPLICATE_EVERY === 0 ? number - DUPLICATE_EVERY + 1 : number;
   return `contact${owner}@example.com`;
 }
 
@@ -20,7 +19,6 @@ function buildContact(number) {
   return [ACCOUNT_ID, `Contact ${number}`, buildEmail(number), randomAge(), status];
 }
 
-// One INSERT with many VALUES rows is far fewer round trips than one per contact.
 async function insertContacts(contacts) {
   const values = [];
   const rows = contacts.map((contact) => {
