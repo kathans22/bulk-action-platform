@@ -71,3 +71,26 @@ CREATE TABLE bulk_action_batches (
 
 -- The worker polls for pending batches, so status is the column it searches on.
 CREATE INDEX idx_bulk_action_batches_status ON bulk_action_batches(status);
+
+
+-- One row per entity the worker touched. This is what the stats endpoint counts.
+CREATE TABLE bulk_action_logs (
+  id BIGSERIAL PRIMARY KEY,
+  bulk_action_id INTEGER NOT NULL REFERENCES bulk_actions(id),
+  entity_id INTEGER,
+  -- status: success, failed, skipped
+  status VARCHAR(20) NOT NULL,
+  message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- How many entities an account has processed in the current minute window.
+CREATE TABLE rate_limits (
+  account_id VARCHAR(50) NOT NULL,
+  window_start TIMESTAMPTZ NOT NULL,
+  event_count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (account_id, window_start)
+);
+
+-- Stats are counts of each status for one bulk action.
+CREATE INDEX idx_bulk_action_logs_action_status ON bulk_action_logs(bulk_action_id, status);
