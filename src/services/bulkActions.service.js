@@ -1,6 +1,6 @@
 const { getEntityConfig } = require('../entities');
 const { getActionHandler } = require('../actions');
-const { getContactIdsByAccount } = require('../queries/contacts.queries');
+const { getContactIdsByAccount, getContactsByIds } = require('../queries/contacts.queries');
 const {
   insertBulkAction,
   setTotalEntities,
@@ -81,6 +81,36 @@ function fetchEntityIds(entityType, accountId) {
   throw badRequest(`No id lookup for entity type "${entityType}"`);
 }
 
+function fetchEntities(entityType, entityIds) {
+  if (entityType === 'contact') {
+    return getContactsByIds(entityIds);
+  }
+
+  throw badRequest(`No entity lookup for entity type "${entityType}"`);
+}
+
+function findDuplicates(entities, dedupeField) {
+  const seenValues = new Set();
+  const duplicates = [];
+
+  for (const entity of entities) {
+    const value = entity[dedupeField];
+
+    if (seenValues.has(value)) {
+      duplicates.push({ entityId: entity.id, value });
+    } else {
+      seenValues.add(value);
+    }
+  }
+
+  return duplicates;
+}
+
+async function findDuplicateEntities(entityType, entityIds, dedupeField) {
+  const entities = await fetchEntities(entityType, entityIds);
+  return findDuplicates(entities, dedupeField);
+}
+
 function futureScheduledAt(scheduledAt) {
   if (!scheduledAt) {
     return null;
@@ -96,11 +126,15 @@ function futureScheduledAt(scheduledAt) {
 }
 
 async function createBulkAction(body) {
-  validateRequest(body);
+  const { entityConfig } = validateRequest(body);
 
   const { accountId, entityType, actionType, configuration } = body;
   const scheduledAt = futureScheduledAt(body.scheduledAt);
   const entityIds = await fetchEntityIds(entityType, accountId);
+
+  const duplicates = configuration.skipDuplicates
+    ? await findDuplicateEntities(entityType, entityIds, entityConfig.dedupeField)
+    : [];
 
   const bulkAction = await insertBulkAction({
     accountId,
