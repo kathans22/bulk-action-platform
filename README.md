@@ -132,3 +132,102 @@ either can run.
 All list endpoints accept `limit` and `offset` and return `{ total, limit, offset, data }`.
 Errors return `{ error: message }` with the appropriate status code; the 429 response also
 carries `limit`, `accountId` and `retryAfterSeconds`.
+
+## Adding a new bulk action
+
+This is the extensibility point the system is built around. Adding `bulk_delete` is
+exactly two changes.
+
+**One: create `src/actions/bulkDelete.js`.** An action file exports two functions and
+knows nothing about HTTP, batching or the worker.
+
+```js
+function validateConfiguration(configuration, entityConfig) {
+  if (configuration.fields) {
+    throw new Error('bulk_delete does not take fields');
+  }
+}
+
+function buildStatement(entityConfig) {
+  return {
+    sql: `DELETE FROM ${entityConfig.table} WHERE id = $1`,
+    values: []
+  };
+}
+
+module.exports = { validateConfiguration, buildStatement };
+```
+
+`buildStatement` returns the statement for one row. The caller appends the entity id as
+the last parameter, so a `DELETE` needs no values of its own and the id lands on `$1`.
+
+**Two: register it in `src/actions/index.js`.**
+
+```js
+const bulkDelete = require('./bulkDelete');
+
+const actionHandlers = {
+  bulk_update: bulkUpdate,
+  bulk_delete: bulkDelete
+};
+```
+
+That is the whole change. No route, controller, service, query or worker file is
+touched. The worker never names an action: it reads `action_type` off the
+`bulk_actions` row, resolves the handler through the registry, and calls
+`buildStatement`. The function is deliberately not called `buildUpdate` for this reason.
+
+The one request-shape note: `configuration` must be present in the request body, so a
+delete is submitted with `"configuration": {}`.
+
+## Adding a new entity
+
+Entity shape lives in one place, `src/entities/index.js`:
+
+```js
+const entities = {
+  contact: {
+    table: 'contacts',
+    updatableFields: ['name', 'email', 'age', 'status'],
+    dedupeField: 'email'
+  },
+  company: {
+    table: 'companies',
+    updatableFields: ['name', 'domain', 'status'],
+    dedupeField: 'domain'
+  }
+};
+```
+
+That object drives validation, the SQL target table and de-duplication. Two further
+pieces are needed because a new entity needs its own SQL:
+
+1. A query file for it, `src/queries/companies.queries.js`, exporting an id lookup by
+   account and a fetch by ids — mirroring `contacts.queries.js`.
+2. Wiring those two queries in, at `fetchEntityIds` and `fetchEntities` in
+   `src/services/bulkActions.service.js` and `fetchEntities` in
+   `src/worker/processBatch.js`, each of which currently dispatches on the entity type
+   with a single `if`.
+
+Actions are the axis this system extends along cleanly; entities need three small edits
+beyond the registry entry. Routing those lookups through the registry as well — a
+`queries` key on each entity object — would close the gap and is the obvious next
+refactor.
+
+## Horizontal scaling
+
+Run more worker processes:
+
+```bash
+npm run worker   # terminal 1
+npm run worker   # terminal 2
+npm run worker   # terminal 3
+```
+
+`claimNextBatch` selects one pending batch with `FOR UPDATE SKIP LOCKED`, so a row
+another worker is already holding is skipped rather than waited on. Two workers can
+never claim the same batch, and no coordination beyond Postgres is involved. Workers can
+live on different machines; they share nothing but the database.
+
+Throughput scales close to linearly until Postgres write throughput becomes the limit —
+measured numbers are in the load test section below.
