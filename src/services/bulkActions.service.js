@@ -123,7 +123,7 @@ async function logDuplicatesAsSkipped(bulkActionId, duplicates, dedupeField) {
   }
 }
 
-function futureScheduledAt(scheduledAt) {
+function validateScheduledAt(scheduledAt) {
   if (!scheduledAt) {
     return null;
   }
@@ -131,17 +131,21 @@ function futureScheduledAt(scheduledAt) {
   const date = new Date(scheduledAt);
 
   if (Number.isNaN(date.getTime())) {
-    throw badRequest('scheduledAt must be a valid timestamp');
+    throw badRequest(`scheduledAt must be a valid ISO timestamp, got "${scheduledAt}"`);
   }
 
-  return date > new Date() ? date : null;
+  if (date <= new Date()) {
+    throw badRequest('scheduledAt must be in the future');
+  }
+
+  return date;
 }
 
 async function createBulkAction(body) {
   const { entityConfig } = validateRequest(body);
 
   const { accountId, entityType, actionType, configuration } = body;
-  const scheduledAt = futureScheduledAt(body.scheduledAt);
+  const scheduledAt = validateScheduledAt(body.scheduledAt);
   const entityIds = await fetchEntityIds(entityType, accountId);
 
   const duplicates = configuration.skipDuplicates
