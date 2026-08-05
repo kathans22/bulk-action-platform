@@ -6,48 +6,48 @@ const {
   getBulkActionLogs
 } = require('../services/bulkActions.service');
 
-async function create(req, res) {
+async function create(req, res, next) {
   try {
     const bulkAction = await createBulkAction(req.body);
     res.status(201).json(bulkAction);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
+    next(error);
   }
 }
 
-async function list(req, res) {
+async function list(req, res, next) {
   try {
     const bulkActions = await listBulkActions(req.query);
     res.json(bulkActions);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
+    next(error);
   }
 }
 
-async function detail(req, res) {
+async function detail(req, res, next) {
   try {
     const bulkAction = await getBulkAction(req.params.id);
     res.json(bulkAction);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
+    next(error);
   }
 }
 
-async function stats(req, res) {
+async function stats(req, res, next) {
   try {
     const bulkActionStats = await getBulkActionStats(req.params.id);
     res.json(bulkActionStats);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
+    next(error);
   }
 }
 
-async function logs(req, res) {
+async function logs(req, res, next) {
   try {
     const bulkActionLogs = await getBulkActionLogs(req.params.id, req.query);
     res.json(bulkActionLogs);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
+    next(error);
   }
 }
 
