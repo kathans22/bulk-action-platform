@@ -136,6 +136,143 @@
         "description": "Returns the per entity log rows written by the worker, newest page first by id."
       },
       "response": []
+    },
+    {
+      "name": "Create bulk action - skip duplicates",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"accountId\": \"acc_1\",\n  \"entityType\": \"contact\",\n  \"actionType\": \"bulk_update\",\n  \"configuration\": {\n    \"fields\": {\n      \"status\": \"inactive\"\n    },\n    \"skipDuplicates\": true\n  },\n  \"scheduledAt\": null\n}",
+          "options": {
+            "raw": { "language": "json" }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions"]
+        },
+        "description": "Keeps the first contact per email and logs every later one as skipped without updating it."
+      },
+      "response": []
+    },
+    {
+      "name": "Create bulk action - scheduled",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"accountId\": \"acc_1\",\n  \"entityType\": \"contact\",\n  \"actionType\": \"bulk_update\",\n  \"configuration\": {\n    \"fields\": {\n      \"status\": \"inactive\"\n    }\n  },\n  \"scheduledAt\": \"2030-01-01T00:00:00Z\"\n}",
+          "options": {
+            "raw": { "language": "json" }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions"]
+        },
+        "description": "Stores the action as scheduled, and the worker refuses to claim its batches until the time is due."
+      },
+      "response": []
+    },
+    {
+      "name": "Create bulk action - invalid field (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"accountId\": \"acc_1\",\n  \"entityType\": \"contact\",\n  \"actionType\": \"bulk_update\",\n  \"configuration\": {\n    \"fields\": {\n      \"id\": 99\n    }\n  },\n  \"scheduledAt\": null\n}",
+          "options": {
+            "raw": { "language": "json" }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions"]
+        },
+        "description": "Rejected with 400 because id is not in the contact entity's updatableFields."
+      },
+      "response": []
+    },
+    {
+      "name": "List bulk actions - completed",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions?status=completed",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions"],
+          "query": [
+            { "key": "status", "value": "completed" }
+          ]
+        },
+        "description": "Shows only actions whose batches have all finished."
+      },
+      "response": []
+    },
+    {
+      "name": "List bulk actions - queued",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions?status=queued",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions"],
+          "query": [
+            { "key": "status", "value": "queued" }
+          ]
+        },
+        "description": "Shows only actions waiting for a worker to pick up their first batch."
+      },
+      "response": []
+    },
+    {
+      "name": "Get bulk action logs - skipped",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions/{{bulkActionId}}/logs?status=skipped",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions", "{{bulkActionId}}", "logs"],
+          "query": [
+            { "key": "status", "value": "skipped" }
+          ]
+        },
+        "description": "Lists the duplicate entities that were logged and never updated."
+      },
+      "response": []
+    },
+    {
+      "name": "Get bulk action logs - failed",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/bulk-actions/{{bulkActionId}}/logs?status=failed",
+          "host": ["{{baseUrl}}"],
+          "path": ["bulk-actions", "{{bulkActionId}}", "logs"],
+          "query": [
+            { "key": "status", "value": "failed" }
+          ]
+        },
+        "description": "Lists entities whose update raised an error, with the database message that caused it."
+      },
+      "response": []
     }
   ]
 }
