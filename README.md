@@ -62,3 +62,73 @@ npm run worker   # batch worker
 | `PORT` | 3000 | API port |
 | `BATCH_SIZE` | 100 | Entity ids per batch row |
 | `RATE_LIMIT_PER_MINUTE` | 10000 | Entities an account may submit per minute |
+
+## Architecture
+
+```
+   POST /bulk-actions
+          |
+          v
+   +---------------+     writes      +----------------------+
+   |  API process  | --------------> |  bulk_actions        |
+   |  (Express)    |                 |  bulk_action_batches |
+   +---------------+                 +----------------------+
+          ^                                     |
+          |                                     | claim one batch
+   GET /bulk-actions/:id                        | FOR UPDATE SKIP LOCKED
+   GET /bulk-actions/:id/stats                  v
+   GET /bulk-actions/:id/logs          +-----------------+
+          |                            |  worker process |
+          |                            +-----------------+
+          |                                     |
+          |                                     | per entity
+          |         reads                       v
+   +----------------------+          +----------------------+
+   |  bulk_action_logs    | <-------- |  contacts            |
+   +----------------------+  writes   +----------------------+
+```
+
+Both processes talk only to Postgres. They never talk to each other, so any number of
+either can run.
+
+### Request lifecycle
+
+1. `POST /bulk-actions` arrives. Required fields are checked, then the entity type and
+   action type are resolved through their registries.
+2. The action handler validates `configuration` — for `bulk_update`, that every field
+   named is in the entity's `updatableFields`.
+3. All entity ids for the account are fetched.
+4. The rate limiter adds that entity count to the account's current minute window and
+   rejects the request with 429 if the window is now over the limit.
+5. If `skipDuplicates` is set, duplicate entities are found on the entity's
+   `dedupeField`, logged as `skipped`, and excluded from the batches.
+6. The `bulk_actions` row is inserted — `scheduled` if `scheduledAt` is in the future,
+   otherwise `queued`.
+7. Remaining ids are split into batches of `BATCH_SIZE` and inserted into
+   `bulk_action_batches`, 500 rows per INSERT statement.
+8. The API responds 201. Nothing has been processed yet.
+9. A worker claims the oldest pending batch whose action is due, marking it `processing`
+   and incrementing its attempt count in one statement.
+10. On the first batch the action moves to `processing` and `started_at` is set.
+11. Each entity in the batch is updated individually and produces one log row —
+    `success`, or `failed` with the database error message.
+12. The batch is marked `done`. If no pending batches remain for that action, the action
+    is marked `completed` and `finished_at` is set.
+13. A batch that throws goes back to `pending` for retry, up to three attempts, then is
+    marked `failed` with the error stored.
+
+## API reference
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Liveness check, does not touch the database |
+| GET | `/contacts` | List contacts, `limit` and `offset` |
+| POST | `/bulk-actions` | Create a bulk action, returns 201 with its id and status |
+| GET | `/bulk-actions` | List bulk actions, newest first, optional `accountId` and `status` |
+| GET | `/bulk-actions/:id` | One bulk action with `progress` as processed, total and percentage |
+| GET | `/bulk-actions/:id/stats` | Counts of success, failed, skipped and pending entities |
+| GET | `/bulk-actions/:id/logs` | Per entity log rows, optional `status` filter |
+
+All list endpoints accept `limit` and `offset` and return `{ total, limit, offset, data }`.
+Errors return `{ error: message }` with the appropriate status code; the 429 response also
+carries `limit`, `accountId` and `retryAfterSeconds`.
