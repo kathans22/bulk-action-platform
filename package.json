@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/app.js",
     "worker": "node src/worker/worker.js",
-    "seed": "node db/seed.js"
+    "seed": "node db/seed.js",
+    "loadtest": "node scripts/loadTest.js"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
