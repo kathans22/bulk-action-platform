@@ -10,6 +10,7 @@ const {
 } = require('../queries/bulkActions.queries');
 const { insertBatches } = require('../queries/batches.queries');
 const { getStats, getLogs, countLogs, insertLogs } = require('../queries/logs.queries');
+const { addEventsToCurrentWindow } = require('../queries/rateLimits.queries');
 
 const BULK_ACTION_STATUSES = ['queued', 'scheduled', 'processing', 'completed', 'failed'];
 
@@ -18,6 +19,8 @@ const LOG_STATUSES = ['success', 'failed', 'skipped'];
 const BATCH_SIZE = Number(process.env.BATCH_SIZE) || 100;
 
 const BATCH_ROWS_PER_INSERT = 500;
+
+const RATE_LIMIT_PER_MINUTE = Number(process.env.RATE_LIMIT_PER_MINUTE) || 10000;
 
 function badRequest(message) {
   const error = new Error(message);
@@ -123,6 +126,20 @@ async function logDuplicatesAsSkipped(bulkActionId, duplicates, dedupeField) {
   }
 }
 
+function rateLimitExceeded() {
+  const error = new Error('Rate limit exceeded');
+  error.statusCode = 429;
+  return error;
+}
+
+async function enforceEntityRateLimit(accountId, entityCount) {
+  const eventsThisWindow = await addEventsToCurrentWindow(accountId, entityCount);
+
+  if (eventsThisWindow > RATE_LIMIT_PER_MINUTE) {
+    throw rateLimitExceeded();
+  }
+}
+
 function validateScheduledAt(scheduledAt) {
   if (!scheduledAt) {
     return null;
@@ -147,6 +164,8 @@ async function createBulkAction(body) {
   const { accountId, entityType, actionType, configuration } = body;
   const scheduledAt = validateScheduledAt(body.scheduledAt);
   const entityIds = await fetchEntityIds(entityType, accountId);
+
+  await enforceEntityRateLimit(accountId, entityIds.length);
 
   const duplicates = configuration.skipDuplicates
     ? await findDuplicateEntities(entityType, entityIds, entityConfig.dedupeField)
