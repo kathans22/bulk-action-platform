@@ -62,4 +62,4 @@ async function processBatch(batch) {
   console.log(`Batch ${batch.id} applied ${bulkAction.action_type} to ${results.length} entities`);
 }
 
-module.exports = { processBatch };
+module.exports = { processBatch, completeBulkActionIfLastBatch };

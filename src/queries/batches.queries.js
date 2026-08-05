@@ -50,6 +50,10 @@ async function markBatchDone(batchId) {
   );
 }
 
+async function resetBatchToPending(batchId) {
+  await query(`UPDATE bulk_action_batches SET status = 'pending' WHERE id = $1`, [batchId]);
+}
+
 async function markBatchFailed(batchId, errorMessage) {
   await query(
     `UPDATE bulk_action_batches
@@ -63,6 +67,7 @@ module.exports = {
   insertBatches,
   claimNextBatch,
   countPendingBatches,
+  resetBatchToPending,
   markBatchDone,
   markBatchFailed
 };
