@@ -41,7 +41,7 @@ async function processBatch(batch) {
   const handler = getActionHandler(bulkAction.action_type);
   const entities = await fetchEntities(bulkAction.entity_type, batch.entity_ids);
 
-  if (bulkAction.status === 'queued') {
+  if (bulkAction.status === 'queued' || bulkAction.status === 'scheduled') {
     await markStarted(bulkAction.id);
   }
 
