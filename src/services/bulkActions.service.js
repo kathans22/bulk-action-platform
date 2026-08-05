@@ -126,9 +126,20 @@ async function logDuplicatesAsSkipped(bulkActionId, duplicates, dedupeField) {
   }
 }
 
-function rateLimitExceeded() {
+function secondsLeftInCurrentMinute() {
+  return 60 - new Date().getSeconds();
+}
+
+function rateLimitExceeded(accountId) {
   const error = new Error('Rate limit exceeded');
   error.statusCode = 429;
+  error.body = {
+    error: 'Rate limit exceeded',
+    limit: RATE_LIMIT_PER_MINUTE,
+    accountId,
+    retryAfterSeconds: secondsLeftInCurrentMinute()
+  };
+
   return error;
 }
 
@@ -136,7 +147,7 @@ async function enforceEntityRateLimit(accountId, entityCount) {
   const eventsThisWindow = await addEventsToCurrentWindow(accountId, entityCount);
 
   if (eventsThisWindow > RATE_LIMIT_PER_MINUTE) {
-    throw rateLimitExceeded();
+    throw rateLimitExceeded(accountId);
   }
 }
 
