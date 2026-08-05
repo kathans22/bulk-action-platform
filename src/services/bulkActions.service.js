@@ -133,7 +133,7 @@ function secondsLeftInCurrentMinute() {
 function rateLimitExceeded(accountId) {
   const error = new Error('Rate limit exceeded');
   error.statusCode = 429;
-  error.body = {
+  error.responseBody = {
     error: 'Rate limit exceeded',
     limit: RATE_LIMIT_PER_MINUTE,
     accountId,

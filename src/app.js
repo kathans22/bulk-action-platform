@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const bulkActionsRoutes = require('./routes/bulkActions.routes');
+const { routeNotFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -12,6 +13,9 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/bulk-actions', bulkActionsRoutes);
+
+app.use(routeNotFound);
+app.use(errorHandler);
 
 const port = process.env.PORT || 3000;
 

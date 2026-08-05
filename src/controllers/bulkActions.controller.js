@@ -11,7 +11,7 @@ async function create(req, res) {
     const bulkAction = await createBulkAction(req.body);
     res.status(201).json(bulkAction);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.body || { error: error.message });
+    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
   }
 }
 
@@ -20,7 +20,7 @@ async function list(req, res) {
     const bulkActions = await listBulkActions(req.query);
     res.json(bulkActions);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.body || { error: error.message });
+    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
   }
 }
 
@@ -29,7 +29,7 @@ async function detail(req, res) {
     const bulkAction = await getBulkAction(req.params.id);
     res.json(bulkAction);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.body || { error: error.message });
+    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
   }
 }
 
@@ -38,7 +38,7 @@ async function stats(req, res) {
     const bulkActionStats = await getBulkActionStats(req.params.id);
     res.json(bulkActionStats);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.body || { error: error.message });
+    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
   }
 }
 
@@ -47,7 +47,7 @@ async function logs(req, res) {
     const bulkActionLogs = await getBulkActionLogs(req.params.id, req.query);
     res.json(bulkActionLogs);
   } catch (error) {
-    res.status(error.statusCode || 500).json(error.body || { error: error.message });
+    res.status(error.statusCode || 500).json(error.responseBody || { error: error.message });
   }
 }
 
