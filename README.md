@@ -231,3 +231,87 @@ live on different machines; they share nothing but the database.
 
 Throughput scales close to linearly until Postgres write throughput becomes the limit —
 measured numbers are in the load test section below.
+
+## Optional features
+
+All three optional features are implemented.
+
+**Rate limiting.** Enforced per account against `RATE_LIMIT_PER_MINUTE`, default 10000.
+The counter is a row in `rate_limits` keyed on account and minute window, incremented
+with an `INSERT ... ON CONFLICT DO UPDATE` that returns the new total. What is counted is
+entities, not requests: one bulk action over 50,000 contacts is 50,000 events and is
+rejected, rather than being waved through as a single event. That is why the check sits
+in the service rather than in route middleware — the entity count is not known until the
+ids have been fetched. Over the limit returns 429 with `limit`, `accountId` and
+`retryAfterSeconds`.
+
+**De-duplication.** Set `configuration.skipDuplicates` to true. Entities are compared on
+the entity's `dedupeField` (`email` for contacts); the first entity for a value is kept
+and every later one is logged as `skipped` with the message `duplicate email: <value>`
+and left out of the batches entirely. This runs once at creation time rather than in the
+worker: a bulk action spans many batches, so "have I seen this email before" would
+otherwise have to be answered across every batch in the action. Doing it once is simpler
+and gives the same result. `total_entities` still counts skipped entities, so
+success + failed + skipped + pending always equals the total.
+
+**Scheduling.** Pass an ISO timestamp as `scheduledAt`. A future time stores the action
+as `scheduled`; a past or unparseable one is rejected with 400. There is no scheduler
+process and no cron — `claimNextBatch` simply will not claim a batch whose action is not
+yet due:
+
+```sql
+WHERE b.status = 'pending'
+  AND (a.scheduled_at IS NULL OR a.scheduled_at <= NOW())
+```
+
+When the time passes, the next poll picks the batches up and the action moves through
+`processing` to `completed` like any other.
+
+## Load test results
+
+`npm run loadtest` creates a bulk action over every seeded contact, polls the stats
+endpoint every second, and reports elapsed time and throughput. Measured on a Windows
+laptop with Postgres 18 running locally, `BATCH_SIZE=1000`:
+
+| Entities | Batch size | Workers | Elapsed | Entities per minute |
+| --- | --- | --- | --- | --- |
+| 5000 | 1000 | 1 | 11.3 s | 26,652 |
+| 5000 | 1000 | 3 | 5.1 s | 58,685 |
+
+Three workers finished the same work 2.2 times faster. Scaling is not perfectly linear
+here because 5000 entities is only five batches, so with three workers the split was
+1/3/1 rather than an even share, and the last worker to finish sets the elapsed time.
+Both figures are comfortably above the "thousands of entities per minute" the brief asks
+for.
+
+These are single runs on one machine, not an average, and throughput varies noticeably
+between runs depending on what else Postgres is doing.
+
+## Assumptions and trade-offs
+
+- **A bulk action targets every entity on the account.** There is no filter or query
+  selector in the request. Adding one is the obvious next step and would change only
+  the id-fetching step at creation.
+- **Rows are updated one at a time, not in a single bulk `UPDATE`.** One statement over
+  the whole batch would be faster, but a single bad row would roll back the batch and
+  there would be no way to say which entity failed. Per-row updates buy per-entity error
+  attribution, which is what makes the logs useful.
+- **Stats are aggregated from the logs table** with a `GROUP BY` on each request rather
+  than kept as running counters on the `bulk_actions` row. At millions of log rows the
+  counters would win; at this scale aggregation is simpler and cannot drift out of sync
+  with reality.
+- **Rate limiting uses a fixed window, not a sliding one.** A burst spanning a minute
+  boundary can therefore briefly allow up to twice the limit. A sliding window fixes that
+  and costs materially more complexity than this scope justifies.
+- **Progress is polled** through `GET /bulk-actions/:id` rather than pushed over SSE or
+  websockets. For an API-only scope, polling is sufficient and keeps the API stateless.
+- **Entity ids are loaded into memory at creation time** to build the batches. At a
+  million entities this would become an `INSERT ... SELECT` that builds the batch rows
+  inside Postgres and never ships the ids to the application at all.
+- **There is no authentication.** `accountId` is taken from the request body and trusted.
+  Real deployment would derive it from an authenticated session, and every query is
+  already scoped by it.
+- **Creation is not wrapped in a transaction.** The action row, skipped logs, batch rows
+  and entity total are four separate statements, so a crash mid-creation could leave an
+  action with only some of its batches. Wrapping them in a single `BEGIN`/`COMMIT` on one
+  pooled client is the correct fix and is not done yet.
