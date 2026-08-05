@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const bulkActionsRoutes = require('./routes/bulkActions.routes');
+const contactsRoutes = require('./routes/contacts.routes');
 const { routeNotFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -13,6 +14,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/bulk-actions', bulkActionsRoutes);
+app.use('/contacts', contactsRoutes);
 
 app.use(routeNotFound);
 app.use(errorHandler);
