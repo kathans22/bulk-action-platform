@@ -44,7 +44,7 @@ psql -d bulk_action_platform -f db/schema.sql
 npm run seed
 ```
 
-`npm run seed` inserts 5000 contacts on account `acc_1`. Roughly 10 percent share an
+`npm run seed` inserts 7000 contacts on account `acc_1`. Roughly 10 percent share an
 email with an earlier contact, which gives the de-duplication feature something to skip.
 
 Then start the two processes, in separate terminals:

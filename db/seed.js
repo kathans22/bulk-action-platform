@@ -1,7 +1,7 @@
 const { pool, query } = require('../src/config/db');
 
 const ACCOUNT_ID = 'acc_1';
-const TOTAL_CONTACTS = 5000;
+const TOTAL_CONTACTS = 7000;
 const ROWS_PER_INSERT = 500;
 const DUPLICATE_EVERY = 10;
 
